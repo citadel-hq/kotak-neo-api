@@ -21,7 +21,7 @@ type Configuration struct {
 	EditSid        string
 	EditRid        string
 	ServerId       string
-	LoginParams    string
+	LoginParams    map[string]string
 	NeoFinKey      string
 }
 
