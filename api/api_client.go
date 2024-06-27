@@ -1,27 +1,23 @@
 // Package api_client provides the Go implementation for API client operations.
 package api
 
-import (
-	"net/http"
-)
-
 const HeaderUserAgent string = "User-Agent"
 
 // APIClient struct defines the client for the API operations.
 type APIClient struct {
-	BaseURL        string
-	HTTPClient     *http.Client
+	RestClient     *RESTClientObject
 	UserAgent      string
 	DefaultHeaders map[string]string
+	Config         Configuration
 }
 
 // NewAPIClient creates a new API client with the specified base URL.
-func NewAPIClient(baseURL string) *APIClient {
+func NewAPIClient(configuration Configuration) *APIClient {
 	return &APIClient{
-		BaseURL:        baseURL,
-		HTTPClient:     &http.Client{},
+		RestClient:     NewRESTClientObject(configuration),
 		UserAgent:      "NeoTradeApi-python/1.0.0/python",
 		DefaultHeaders: map[string]string{},
+		Config:         configuration,
 	}
 }
 

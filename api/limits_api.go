@@ -3,47 +3,57 @@ package api
 
 import (
 	"encoding/json"
-	"net/http"
+	"fmt"
 )
 
 // LimitsAPI struct defines the client for the limits API operations.
 type LimitsAPI struct {
-	Client *http.Client
-	BaseURL string
+	ApiClient  *APIClient
+	RestClient *RESTClientObject
 }
 
 // NewLimitsAPI creates a new limits API client with the specified base URL.
-func NewLimitsAPI(baseURL string) *LimitsAPI {
+func NewLimitsAPI(apiClient *APIClient) *LimitsAPI {
 	return &LimitsAPI{
-		Client:  &http.Client{},
-		BaseURL: baseURL,
+		ApiClient:  apiClient,
+		RestClient: apiClient.RestClient,
 	}
 }
 
 // GetLimits retrieves the limits for a given segment, exchange, and product.
 func (api *LimitsAPI) GetLimits(segment, exchange, product string) (map[string]interface{}, error) {
-	url := api.BaseURL + "/limits"
-	req, err := http.NewRequest("GET", url, nil)
+	headerParams := map[string]string{
+		"Authorization": fmt.Sprintf("Bearer %s", api.ApiClient.Config.BearerToken),
+		"Sid":           fmt.Sprintf("Bearer %s", api.ApiClient.Config.EditSid),
+		"Auth":          fmt.Sprintf("Bearer %s", api.ApiClient.Config.EditToken),
+		"neo-fin-key":   fmt.Sprintf("Bearer %s", api.ApiClient.Config.getNeoFinKey()),
+		"accept":        "application/json",
+		"Content-Type":  "application/x-www-form-urlencoded",
+	}
+
+	queryParams := map[string]string{
+		"sId": fmt.Sprintf("Bearer %s", api.ApiClient.Config.ServerId),
+	}
+
+	bodyParams := map[string]string{
+		"seg":  segment,
+		"exch": exchange,
+		"prod": product,
+	}
+
+	url, err := api.ApiClient.Config.getUrlDetails("limits")
 	if err != nil {
 		return nil, err
 	}
 
-	q := req.URL.Query()
-	q.Add("segment", segment)
-	q.Add("exchange", exchange)
-	q.Add("product", product)
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := api.Client.Do(req)
+	limits_report, err := api.RestClient.Request(url, "POST", queryParams, headerParams, bodyParams)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(limits_report.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-
 	return result, nil
 }
