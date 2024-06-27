@@ -1,4 +1,4 @@
-// Package go provides the Go implementation for portfolio holdings API operations.
+// Package api provides the Go implementation for portfolio holdings API operations.
 package go
 
 import (

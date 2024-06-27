@@ -13,12 +13,12 @@ Go 1.13+
 You can install the package using:
 
 ```sh
-go get github.com/Kotak-Neo/kotak-neo-api/go
+api get github.com/Kotak-Neo/kotak-neo-api/api
 ```
 
 Then import the package:
 ```go
-import neo "github.com/Kotak-Neo/kotak-neo-api/go"
+import neo "github.com/Kotak-Neo/kotak-neo-api/api"
 ```
 
 ### Go Modules

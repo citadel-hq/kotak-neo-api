@@ -1,4 +1,4 @@
-// Package go provides utility functions for the Go implementation of the API client.
+// Package api provides utility functions for the Go implementation of the API client.
 package go
 
 import (

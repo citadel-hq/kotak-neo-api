@@ -1,4 +1,4 @@
-// Package go provides the Go implementation for trade report API operations.
+// Package api provides the Go implementation for trade report API operations.
 package go
 
 import (

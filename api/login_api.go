@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+	"bytes"
 )
 
 // LoginAPI struct defines the client for the login API operations.

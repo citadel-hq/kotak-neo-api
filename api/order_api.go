@@ -1,4 +1,4 @@
-// Package go implements the order API in Go.
+// Package api implements the order API in Go.
 package go
 
 import (

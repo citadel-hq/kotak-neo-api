@@ -1,4 +1,4 @@
-// Package go implements the order history API in Go.
+// Package api implements the order history API in Go.
 package go
 
 import (
