@@ -40,7 +40,7 @@ func (api *LogoutAPI) LogoutUser() (map[string]interface{}, error) {
 		return nil, err
 	}
 	var jsonResp map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&jsonResp)
+	_ = json.NewDecoder(resp.Body).Decode(&jsonResp)
 
 	return jsonResp, nil
 }
