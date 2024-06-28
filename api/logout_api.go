@@ -2,40 +2,45 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
 // LogoutAPI struct defines the client for the logout API operations.
 type LogoutAPI struct {
-	BaseURL    string
-	HTTPClient *http.Client
+	ApiClient  *APIClient
+	RestClient *RESTClientObject
 }
 
 // NewLogoutAPI creates a new logout API client with the specified base URL.
-func NewLogoutAPI(baseURL string) *LogoutAPI {
+func NewLogoutAPI(apiClient *APIClient) *LogoutAPI {
 	return &LogoutAPI{
-		BaseURL:    baseURL,
-		HTTPClient: &http.Client{},
+		ApiClient:  apiClient,
+		RestClient: apiClient.RestClient,
 	}
 }
 
 // LogoutUser performs a logout operation for a user session.
-func (api *LogoutAPI) LogoutUser() error {
-	url := api.BaseURL + "/logout"
-	req, err := http.NewRequest("POST", url, nil)
+func (api *LogoutAPI) LogoutUser() (map[string]interface{}, error) {
+	headerParams := map[string]string{
+		"Authorization": fmt.Sprintf("Bearer %s", api.ApiClient.Config.BearerToken),
+		"Sid":           api.ApiClient.Config.EditSid,
+		"Auth":          api.ApiClient.Config.EditToken,
+		"accept":        "application/json",
+		"Content-Type":  "application/x-www-form-urlencoded",
+	}
+
+	url, err := api.ApiClient.Config.getUrlDetails("logout")
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	resp, err := api.HTTPClient.Do(req)
+	resp, err := api.RestClient.Request(http.MethodPost, url, nil, headerParams, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer resp.Body.Close()
+	var jsonResp map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&jsonResp)
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to logout user, status code: %d", resp.StatusCode)
-	}
-
-	return nil
+	return jsonResp, nil
 }

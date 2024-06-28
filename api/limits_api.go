@@ -4,6 +4,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 )
 
 // LimitsAPI struct defines the client for the limits API operations.
@@ -24,15 +25,15 @@ func NewLimitsAPI(apiClient *APIClient) *LimitsAPI {
 func (api *LimitsAPI) GetLimits(segment, exchange, product string) (map[string]interface{}, error) {
 	headerParams := map[string]string{
 		"Authorization": fmt.Sprintf("Bearer %s", api.ApiClient.Config.BearerToken),
-		"Sid":           fmt.Sprintf("Bearer %s", api.ApiClient.Config.EditSid),
-		"Auth":          fmt.Sprintf("Bearer %s", api.ApiClient.Config.EditToken),
-		"neo-fin-key":   fmt.Sprintf("Bearer %s", api.ApiClient.Config.getNeoFinKey()),
+		"Sid":           api.ApiClient.Config.EditSid,
+		"Auth":          api.ApiClient.Config.EditToken,
+		"neo-fin-key":   api.ApiClient.Config.getNeoFinKey(),
 		"accept":        "application/json",
 		"Content-Type":  "application/x-www-form-urlencoded",
 	}
 
 	queryParams := map[string]string{
-		"sId": fmt.Sprintf("Bearer %s", api.ApiClient.Config.ServerId),
+		"sId": api.ApiClient.Config.ServerId,
 	}
 
 	bodyParams := map[string]string{
@@ -46,7 +47,7 @@ func (api *LimitsAPI) GetLimits(segment, exchange, product string) (map[string]i
 		return nil, err
 	}
 
-	limits_report, err := api.RestClient.Request(url, "POST", queryParams, headerParams, bodyParams)
+	limits_report, err := api.RestClient.Request(http.MethodPost, url, queryParams, headerParams, bodyParams)
 	if err != nil {
 		return nil, err
 	}
