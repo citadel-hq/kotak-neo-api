@@ -1,57 +1,53 @@
 // Package api provides the Go implementation for portfolio holdings API operations.
-package go
+package api
 
 import (
 	"encoding/json"
 	"net/http"
+	"fmt"
 )
 
-// PortfolioHoldingsService handles communication with the portfolio holdings related methods of the API.
-type PortfolioHoldingsService service
-
-// PortfolioHoldingsRequest represents a request for fetching portfolio holdings.
-type PortfolioHoldingsRequest struct {
-	ClientID string `json:"client_id"`
+type PortfolioHoldingsAPI struct {
+	ApiClient  *APIClient
+	RestClient *RESTClientObject
 }
 
-// PortfolioHoldingsResponse represents the response from the portfolio holdings API.
-type PortfolioHoldingsResponse struct {
-	Holdings []Holding `json:"holdings"`
+func NewPortfolioHoldingsAPI(apiClient *APIClient) *PortfolioHoldingsAPI {
+	return &PortfolioHoldingsAPI{
+		ApiClient:  apiClient,
+		RestClient: apiClient.RestClient,
+	}
 }
 
 // Holding represents a single holding in the portfolio.
 type Holding struct {
-	Symbol    string  `json:"symbol"`
-	Quantity  int     `json:"quantity"`
+	Symbol       string  `json:"symbol"`
+	Quantity     int     `json:"quantity"`
 	AveragePrice float64 `json:"average_price"`
 	CurrentPrice float64 `json:"current_price"`
-	ProfitLoss  float64 `json:"profit_loss"`
+	ProfitLoss   float64 `json:"profit_loss"`
 }
 
 // Fetch retrieves the portfolio holdings for the specified client ID.
-func (s *PortfolioHoldingsService) Fetch(req *PortfolioHoldingsRequest) (*PortfolioHoldingsResponse, *http.Response, error) {
-	url := s.client.BaseURL + "/portfolio/holdings"
-	reqBody, err := json.Marshal(req)
+func (api *PortfolioHoldingsAPI) Fetch() (map[string]interface{}, error) {
+	headerParams := map[string]string{
+		"Authorization": fmt.Sprintf("Bearer %s", api.ApiClient.Config.BearerToken),
+		"Sid":           api.ApiClient.Config.EditSid,
+		"Auth":          api.ApiClient.Config.EditToken,
+		"accept":        "*/*",
+	}
+	queryParams := map[string]string{
+		"sId": api.ApiClient.Config.ServerId,
+	}
+	url, err := api.ApiClient.Config.getUrlDetails("holdings")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(reqBody))
+	resp, err := api.RestClient.Request(http.MethodGet, url, queryParams, headerParams, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	httpReq.Header.Add("Content-Type", "application/json")
-	resp, err := s.client.Do(httpReq)
-	if err != nil {
-		return nil, resp, err
-	}
-	defer resp.Body.Close()
-
-	var holdingsResp PortfolioHoldingsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&holdingsResp); err != nil {
-		return nil, resp, err
-	}
-
-	return &holdingsResp, resp, nil
+	var jsonResp map[string]interface{}
+	_ = json.NewDecoder(resp.Body).Decode(&jsonResp)
+	return jsonResp, nil
 }
