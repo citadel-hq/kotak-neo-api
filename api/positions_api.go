@@ -1,55 +1,46 @@
-package go
+package api
 
 import (
 	"encoding/json"
 	"net/http"
+	"fmt"
 )
 
 // PositionsAPI represents the structure for positions API operations
 type PositionsAPI struct {
-	Client *http.Client
+	ApiClient  *APIClient
+	RestClient *RESTClientObject
 }
 
 // NewPositionsAPI creates a new instance of PositionsAPI with the provided HTTP client
-func NewPositionsAPI(client *http.Client) *PositionsAPI {
+func NewPositionsAPI(apiClient *APIClient) *PositionsAPI {
 	return &PositionsAPI{
-		Client: client,
+		ApiClient:  apiClient,
+		RestClient: apiClient.RestClient,
 	}
 }
 
 // GetPositions retrieves the positions for the user
-func (api *PositionsAPI) GetPositions() ([]Position, error) {
-	// Define the URL for the positions API endpoint
-	url := "http://example.com/api/positions"
-
-	// Create a new HTTP request
-	req, err := http.NewRequest("GET", url, nil)
+func (api *PositionsAPI) GetPositions() (map[string]interface{}, error) {
+	headerParams := map[string]string{
+		"Authorization": fmt.Sprintf("Bearer %s", api.ApiClient.Config.BearerToken),
+		"Sid":           api.ApiClient.Config.EditSid,
+		"Auth":          api.ApiClient.Config.EditToken,
+		"neo-fin-key":   api.ApiClient.Config.getNeoFinKey(),
+		"accept":        "application/json",
+	}
+	queryParams := map[string]string{
+		"sId": api.ApiClient.Config.ServerId,
+	}
+	url, err := api.ApiClient.Config.getUrlDetails("positions")
 	if err != nil {
 		return nil, err
 	}
-
-	// Execute the request
-	resp, err := api.Client.Do(req)
+	resp, err := api.RestClient.Request(http.MethodGet, url, queryParams, headerParams, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	// Decode the response body into the positions slice
-	var positions []Position
-	if err := json.NewDecoder(resp.Body).Decode(&positions); err != nil {
-		return nil, err
-	}
-
-	return positions, nil
-}
-
-// Position represents the structure of a trading position
-type Position struct {
-	ID          string  `json:"id"`
-	Instrument  string  `json:"instrument"`
-	Quantity    int     `json:"quantity"`
-	AverageCost float64 `json:"averageCost"`
-	CurrentPrice float64 `json:"currentPrice"`
-	ProfitLoss  float64 `json:"profitLoss"`
+	var jsonResp map[string]interface{}
+	_ = json.NewDecoder(resp.Body).Decode(&jsonResp)
+	return jsonResp, nil
 }
