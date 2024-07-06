@@ -5,21 +5,33 @@ import (
 	"strings"
 	"fmt"
 	"encoding/binary"
+	"nhooyr.io/websocket"
+	"context"
+	"github.com/shikharvaish28/kotak-neo-api/api"
 )
 
 type HSWrapper struct {
 	counter int
 	ackNum  int
+	ws      *websocket.Conn
 }
 
 func NewHSWrapper() *HSWrapper {
+	ctx := context.Background()
+	conn, _, err := websocket.Dial(ctx, api.WebsocketUrl, nil)
+	if err != nil {
+		panic(fmt.Sprintf("websocket error - %s", err.Error()))
+		return nil
+	}
+
 	return &HSWrapper{
 		counter: 0,
 		ackNum:  0,
+		ws:      conn,
 	}
 }
 
-func (h *HSWrapper) getNewTopicData(c string) interface{} {
+func (h *HSWrapper) getNewTopicData(c string) Topic {
 	parts := strings.Split(c, "|")
 	feedType := parts[0]
 
@@ -77,14 +89,14 @@ func (h *HSWrapper) handleConnectionType(e []byte, pos int) []byte {
 	pos++
 	if fCount >= 2 {
 		pos++
-		valLen := buf2long(e[pos : pos+2])
+		valLen := int(buf2long(e[pos : pos+2]))
 		pos += 2
 		status := string(e[pos : pos+valLen])
 		pos += valLen
 		pos++
-		valLen = buf2long(e[pos : pos+2])
+		valLen = int(buf2long(e[pos : pos+2]))
 		pos += 2
-		ackCount := buf2long(e[pos : pos+valLen])
+		ackCount := int(buf2long(e[pos : pos+valLen]))
 		pos += valLen
 		if status == BinRespStat["OK"] {
 			jsonRes["stat"] = STAT["OK"]
@@ -99,9 +111,8 @@ func (h *HSWrapper) handleConnectionType(e []byte, pos int) []byte {
 		}
 		h.ackNum = ackCount
 	} else if fCount == 1 {
-		fid1 := e[pos]
 		pos++
-		valLen := buf2long(e[pos : pos+2])
+		valLen := int(buf2long(e[pos : pos+2]))
 		pos += 2
 		status := string(e[pos : pos+valLen])
 		pos += valLen
@@ -128,72 +139,69 @@ func (h *HSWrapper) handleConnectionType(e []byte, pos int) []byte {
 func (h *HSWrapper) handleDataType(e []byte, pos int) []byte {
 	if h.ackNum > 0 {
 		h.counter++
-		msgNum := buf2long(e[pos : pos+4])
+		msgNum := int32(buf2long(e[pos : pos+4]))
 		pos += 4
 		if h.counter == h.ackNum {
 			req := getAcknowledgementReq(msgNum)
-			if ws != nil {
-				ws.send(req, 0x2)
-				h.counter = 0
-			}
+			_ = h.ws.Write(context.Background(), websocket.MessageBinary, req)
 		}
 	}
 	hList := make([]interface{}, 0)
-	g := buf2long(e[pos : pos+2])
+	g := int(buf2long(e[pos : pos+2]))
 	pos += 2
 	for n := 0; n < g; n++ {
 		pos += 2
-		c := buf2long(e[pos : pos+1])
+		c := int(buf2long(e[pos : pos+1]))
 		pos++
 		if c == ResponseTypes["SNAP"] {
-			f := buf2long(e[pos : pos+4])
+			f := int(buf2long(e[pos : pos+4]))
 			pos += 4
-			nameLen := buf2long(e[pos : pos+1])
+			nameLen := int(buf2long(e[pos : pos+1]))
 			pos++
 			topicName := buf2string(e[pos : pos+nameLen])
 			pos += nameLen
-			d := h.getNewTopicData(topicName)
-			if d != nil {
-				topicList[f] = d
-				fCount := buf2long(e[pos : pos+1])
+			topicData := h.getNewTopicData(topicName)
+			if topicData != nil {
+				topicList[f] = topicData
+				fCount := int(buf2long(e[pos : pos+1]))
 				pos++
 				for index := 0; index < fCount; index++ {
 					fValue := buf2long(e[pos : pos+4])
-					d.setLongValues(index, fValue)
+					topicData.setLongValues(index, fValue)
 					pos += 4
 				}
-				d.setMultiplierAndPrec()
-				fCount = buf2long(e[pos : pos+1])
+				topicData.setMultiplierAndPrecision()
+				fCount = int(buf2long(e[pos : pos+1]))
 				pos++
 				for index := 0; index < fCount; index++ {
-					fid := buf2long(e[pos : pos+1])
+					fid := int(buf2long(e[pos : pos+1]))
 					pos++
-					dataLen := buf2long(e[pos : pos+1])
+					dataLen := int(buf2long(e[pos : pos+1]))
 					pos++
 					strVal := buf2string(e[pos : pos+dataLen])
 					pos += dataLen
-					d.setStringValues(fid, strVal)
+					topicData.setStringValues(fid, strVal)
 				}
-				hList = append(hList, d.prepareData("SNAP"))
+				hList = append(hList, topicData.prepareData("SNAP"))
 			} else {
 				fmt.Println("Invalid topic feed type !")
 			}
 		} else if c == ResponseTypes["UPDATE"] {
-			f := buf2long(e[pos : pos+4])
+			f := int(buf2long(e[pos : pos+4]))
 			pos += 4
-			d := topicList[f]
-			if d == nil {
+			topicData := topicList[f]
+			if topicData == nil {
 				fmt.Println("Topic Not Available in TopicList!")
 			} else {
-				fCount := buf2long(e[pos : pos+1])
+				fCount := int(buf2long(e[pos : pos+1]))
 				pos++
 				for index := 0; index < fCount; index++ {
 					fValue := buf2long(e[pos : pos+4])
-					d.setLongValues(index, fValue)
+					topicData.setLongValues(index, fValue)
 					pos += 4
 				}
 			}
-			hList = append(hList, d.prepareData("SUB"))
+			hList = append(hList, topicData.prepareData("SUB"))
 		} else {
 			fmt.Println("Invalid ResponseType:", c)
 		}
@@ -283,16 +291,14 @@ func (h *HSWrapper) handleOPCSubscribe(e []byte, pos int) []byte {
 		jsonRes["type"] = RespTypeValues["OPC"]
 		jsonRes["msg"] = "successful"
 		jsonRes["stCode"] = RespCodes["SUCCESS"]
-		fld := buf2long(e[pos : pos+1])
 		pos++
-		fieldLength := buf2long(e[pos : pos+2])
+		fieldLength := int(buf2long(e[pos : pos+2]))
 		pos += 2
 		opcKey := buf2string(e[pos : pos+fieldLength])
 		pos += fieldLength
 		jsonRes["key"] = opcKey
-		fld = buf2long(e[pos : pos+1])
 		pos++
-		fieldLength = buf2long(e[pos : pos+2])
+		fieldLength = int(buf2long(e[pos : pos+2]))
 		pos += 2
 		data := buf2string(e[pos : pos+fieldLength])
 		pos += fieldLength

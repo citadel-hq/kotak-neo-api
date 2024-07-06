@@ -21,7 +21,7 @@ func NewScripTopicData() *ScripTopicData {
 	return t
 }
 
-func (t *ScripTopicData) setMultiplierAndPrec() {
+func (t *ScripTopicData) setMultiplierAndPrecision() {
 	if t.updatedFieldsArray[ScripIndex["PRECISION"]] != nil {
 		t.precision = t.fieldDataArray[ScripIndex["PRECISION"]].(int)
 		t.precisionValue = int(math.Pow(10, float64(t.precision)))
@@ -31,7 +31,7 @@ func (t *ScripTopicData) setMultiplierAndPrec() {
 	}
 }
 
-func (t *ScripTopicData) prepareData(reqType interface{}) map[string]interface{} {
+func (t *ScripTopicData) prepareData(reqType string) map[string]interface{} {
 	t.prepareCommonData()
 	precisionFormat := "%." + strconv.Itoa(t.precision) + "f"
 
@@ -71,7 +71,7 @@ func (t *ScripTopicData) prepareData(reqType interface{}) map[string]interface{}
 		}
 	}
 	t.updatedFieldsArray = [100]interface{}{}
-	if reqType != nil {
+	if reqType != "" {
 		jsonRes["request_type"] = reqType
 	}
 	return jsonRes

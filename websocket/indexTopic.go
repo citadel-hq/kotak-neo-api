@@ -20,7 +20,7 @@ func NewIndexTopicData() *IndexTopicData {
 	return t
 }
 
-func (t *IndexTopicData) setMultiplierAndPrec() {
+func (t *IndexTopicData) setMultiplierAndPrecision() {
 	if t.updatedFieldsArray[INDEX_INDEX["PRECISION"]] != nil {
 		t.precision = t.fieldDataArray[INDEX_INDEX["PRECISION"]].(int)
 		t.precisionValue = int(math.Pow(10, float64(t.precision)))
@@ -30,7 +30,7 @@ func (t *IndexTopicData) setMultiplierAndPrec() {
 	}
 }
 
-func (t *IndexTopicData) prepareData(reqType interface{}) map[string]interface{} {
+func (t *IndexTopicData) prepareData(reqType string) map[string]interface{} {
 	t.prepareCommonData()
 	if t.updatedFieldsArray[INDEX_INDEX["LTP"]] != nil || t.updatedFieldsArray[INDEX_INDEX["CLOSE"]] != nil {
 		ltp := t.fieldDataArray[INDEX_INDEX["LTP"]]
@@ -60,7 +60,7 @@ func (t *IndexTopicData) prepareData(reqType interface{}) map[string]interface{}
 		}
 	}
 	t.updatedFieldsArray = [100]interface{}{}
-	if reqType != nil {
+	if reqType != "" {
 		jsonRes["request_type"] = reqType
 	}
 	return jsonRes

@@ -14,7 +14,7 @@ const (
 )
 
 var (
-	topicList = map[string]interface{}{}
+	topicList = map[int]Topic{}
 	counter   = 0
 )
 

@@ -8,6 +8,14 @@ import (
 	"bytes"
 )
 
+type Topic interface {
+	setLongValues(int, int64)
+	prepareCommonData()
+	setStringValues(int, string)
+	setMultiplierAndPrecision()
+	prepareData(string) map[string]interface{}
+}
+
 type TopicData struct {
 	feedType           string
 	exchange           string
@@ -78,7 +86,7 @@ func NewDepthTopicData() *DepthTopicData {
 	return t
 }
 
-func (t *DepthTopicData) setMultiplierAndPrec() {
+func (t *DepthTopicData) setMultiplierAndPrecision() {
 	if t.updatedFieldsArray[DEPTH_INDEX["PRECISION"]] != nil {
 		t.precision = t.fieldDataArray[DEPTH_INDEX["PRECISION"]].(int)
 		t.precisionValue = int(pow(10, t.precision))
@@ -96,7 +104,7 @@ func pow(x, y int) int {
 	return result
 }
 
-func (t *DepthTopicData) prepareData(reqType interface{}) map[string]interface{} {
+func (t *DepthTopicData) prepareData(reqType string) map[string]interface{} {
 	t.prepareCommonData()
 	jsonRes := make(map[string]interface{})
 	for d, c := range DepthMapping {
@@ -112,7 +120,7 @@ func (t *DepthTopicData) prepareData(reqType interface{}) map[string]interface{}
 		}
 	}
 	t.updatedFieldsArray = [100]interface{}{}
-	if reqType != nil {
+	if reqType != "" {
 		jsonRes["request_type"] = reqType
 	}
 	return jsonRes
@@ -319,10 +327,10 @@ func getOpcChainSubsRequest(d string, e int64, a, c, f byte) []byte {
 	return buffer
 }
 
-func sendJSONArrResp(a interface{}) string {
+func sendJSONArrResp(a interface{}) []byte {
 	jsonArrRes := []interface{}{a}
 	jsonData, _ := json.Marshal(jsonArrRes)
-	return string(jsonData)
+	return jsonData
 }
 
 func buf2long(a []byte) int64 {
