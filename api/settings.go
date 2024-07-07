@@ -50,20 +50,20 @@ var orderTypeAllowedValues = []string{
 	"L", "MKT", "SL", "SL-M", "SP", "2L", "3L",
 }
 
-var exchangeSegment = map[string]string{
+var ExchangeSegment = map[string]string{
 	"nse_cm": "nse_cm", "NSE": "nse_cm", "nse": "nse_cm", "BSE": "bse_cm", "bse": "bse_cm",
 	"bse_cm": "bse_cm", "NFO": "nse_fo", "nse_fo": "nse_fo", "nfo": "nse_fo", "BFO": "bse_fo",
 	"bse_fo": "bse_fo", "bfo": "bse_fo", "CDS": "cde_fo", "cde_fo": "cde_fo", "cds": "cde_fo",
 	"BCD": "bcs-fo", "bcs-fo": "bcs-fo", "bcd": "bcs-fo", "MCX": "mcx", "mcx": "mcx", "mcx_fo": "mcx",
 }
 
-var product = map[string]string{
+var Product = map[string]string{
 	"Normal": "NRML", "NRML": "NRML", "CNC": "CNC", "cnc": "CNC", "Cash and Carry": "CNC", "MIS": "MIS",
 	"mis": "MIS", "INTRADAY": "INTRADAY", "intraday": "INTRADAY", "Cover Order": "CO", "co": "CO",
 	"CO": "CO", "BO": "Bracket Order", "Bracket Order": "Bracket Order", "bo": "Bracket Order",
 }
 
-var orderType = map[string]string{
+var OrderType = map[string]string{
 	"Limit": "L", "L": "L", "l": "L", "MKT": "MKT", "mkt": "MKT", "Market": "MKT", "sl": "SL", "SL": "SL",
 	"Stop loss limit": "SL", "Stop loss market": "SL-M", "SL-M": "SL-M", "sl-m": "SL-M", "Spread": "SP",
 	"SP": "SP", "sp": "SP", "2L": "2L", "2l": "2L", "Two Leg": "2L", "3L": "3L", "3l": "3L",

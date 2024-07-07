@@ -316,7 +316,7 @@ func getOpcChainSubsRequest(opcKey string, e int64, a, c byte, channelType int) 
 	pos++
 	binary.BigEndian.PutUint16(buffer[pos:pos+2], 1)
 	pos += 2
-	buffer[pos] = f
+	binary.BigEndian.PutUint16(buffer[pos:pos+1], uint16(channelType))
 	return buffer
 }
 
