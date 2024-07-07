@@ -160,6 +160,9 @@ type DataType struct {
 var IndexMapping = make([]*DataType, 55)
 var ScripMapping = make([]*DataType, 100)
 var DepthMapping = make([]*DataType, 55)
+var ScripPrefix = "sf"
+var IndexPrefix = "if"
+var DepthPrefix = "dp"
 
 func init() {
 	IndexMapping[0] = &DataType{"ftm0", FieldTypes["DATE"]}

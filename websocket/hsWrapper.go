@@ -5,29 +5,236 @@ import (
 	"strings"
 	"fmt"
 	"encoding/binary"
-	"nhooyr.io/websocket"
 	"context"
 	"github.com/shikharvaish28/kotak-neo-api/api"
+	"log"
+	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/wsjson"
+	"time"
+	"strconv"
 )
 
-type HSWrapper struct {
-	counter int
-	ackNum  int
-	ws      *websocket.Conn
+// BrokerEvent to be sent in channel
+type BrokerEvent struct {
+	Event     string
+	Timestamp time.Time
 }
 
-func NewHSWrapper() *HSWrapper {
+type HSWrapper struct {
+	counter       int
+	ackNum        int
+	ws            *websocket.Conn
+	channel       chan BrokerEvent
+	channelTokens map[int]interface{}
+}
+
+func NewHSWrapper() (*HSWrapper, chan BrokerEvent) {
 	ctx := context.Background()
 	conn, _, err := websocket.Dial(ctx, api.WebsocketUrl, nil)
 	if err != nil {
 		panic(fmt.Sprintf("websocket error - %s", err.Error()))
-		return nil
+		return nil, nil
 	}
+	channel := make(chan BrokerEvent, 100) // bounded channel of 100 events.
+
+	go func() {
+		for {
+			var msg string
+			err := wsjson.Read(ctx, conn, &msg)
+			if err != nil {
+				log.Println("Failed to read message:", err)
+				return
+			}
+			fmt.Println("Received:", msg)
+			channel <- BrokerEvent{
+				Event:     msg,
+				Timestamp: time.Now(),
+			}
+		}
+	}()
 
 	return &HSWrapper{
-		counter: 0,
-		ackNum:  0,
-		ws:      conn,
+		counter:       0,
+		ackNum:        0,
+		ws:            conn,
+		channel:       channel,
+		channelTokens: make(map[int]interface{}),
+	}, channel
+}
+
+func (h *HSWrapper) GetLiveFeed(instrumentTokens []map[string]string, isIndex bool, isDepth bool) error {
+	// TODO: perform total instrument handling.
+	subscriptionType := ReqTypeValues["SCRIP_SUBS"]
+	if isIndex {
+		subscriptionType = ReqTypeValues["INDEX_SUBS"]
+	}
+	if isDepth {
+		subscriptionType = ReqTypeValues["DEPTH_SUBS"]
+	}
+	tempTokenList := []map[string]interface{}{}
+
+	// validate and push all instrumentation tokens.
+	if validInstrumentationTokens(instrumentTokens) {
+		for _, token := range instrumentTokens {
+			key := token["instrument_token"]
+			val := map[string]string{
+				"instrument_token":  token["instrument_token"],
+				"exchange_segment":  token["exchange_segment"],
+				"subscription_type": subscriptionType,
+			}
+			tempTokenList = append(tempTokenList, map[string]interface{}{
+				key: val,
+			})
+		}
+		// is map[int][]map[string]interface{}
+		channelTokens := h.channelSegregation(tempTokenList)
+		h.subscribeScrips(channelTokens)
+	}
+
+	return nil
+}
+
+// channelSegregation internally returns a map[int][]map[string]interface{}
+func (h *HSWrapper) channelSegregation(tmpTokenList []map[string]interface{}) map[int]interface{} {
+	outChannelList := map[int]interface{}{}
+	for channelNum := 2; channelNum < 17; channelNum++ {
+		// Check if there is an existing channel array for this channel number
+		if _, ok := h.channelTokens[channelNum]; !ok {
+			h.channelTokens[channelNum] = []map[string]interface{}{}
+		}
+		if _, ok := outChannelList[channelNum]; !ok {
+			outChannelList[channelNum] = []map[string]interface{}{}
+		}
+
+		// Note: I don't care about the length checks for now.
+		if values, ok := h.channelTokens[channelNum].([]map[string]interface{}); ok {
+			h.channelTokens[channelNum] = append(values, tmpTokenList...)
+		}
+		if values, ok := outChannelList[channelNum].([]map[string]interface{}); ok {
+			outChannelList[channelNum] = append(values, tmpTokenList...)
+		}
+	}
+
+	return outChannelList
+}
+
+func validInstrumentationTokens(tokens []map[string]string) bool {
+	validParams := []string{"instrument_token", "exchange_segment"}
+	for _, item := range tokens {
+		for _, param := range validParams {
+			if _, ok := item[param]; ok {
+			} else {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (h *HSWrapper) subscribeScrips(tokens map[int]interface{}) {
+	for _, v := range tokens {
+		if values, ok := v.([]map[string]interface{}); ok {
+			for channel, tokens := range values {
+				for tokenMap := range tokens {
+					values := []interface{}{}
+					for _, val := range tokenMap {
+						values = append(values, val)
+					}
+					instrumentMap := (values[0]).(map[string]string)
+					scrips := h.formatTokenLive(instrumentMap)
+					// TODO: Ensure that json being sent from here is mapped correctly in wsSend()
+					requestParams := map[string]interface{}{
+						"TYPE":        instrumentMap["subscription_type"],
+						"SCRIPS":      scrips,
+						"CHANNEL_NUM": channel,
+					}
+					h.wsSend(requestParams)
+				}
+			}
+		}
+	}
+}
+
+func (h *HSWrapper) formatTokenLive(instrumentTokens map[string]string) interface{} {
+	scrips := ""
+
+	if exchangeSegment, ok1 := instrumentTokens["exchange_segment"]; ok1 {
+		if instrumentToken, ok2 := instrumentTokens["instrument_token"]; ok2 {
+			scrips += exchangeSegment + "|" + instrumentToken
+		}
+	}
+	return scrips
+}
+
+// TODO: continue completing this.
+func (h *HSWrapper) wsSend(reqJson map[string]interface{}) {
+	reqType := reqJson["TYPE"].(string)
+	scrips := ""
+	channelNum := 1
+	if val, ok := reqJson["SCRIPS"]; ok {
+		scrips = val.(string)
+		channelNum = int(reqJson["CHANNEL_NUM"].(float64))
+	}
+
+	var req []byte
+
+	switch reqType {
+	case ReqTypeValues["CONNECTION"]:
+		if userId, ok := reqJson["USER_ID"]; ok {
+			req = prepareConnectionRequest(userId.(string))
+		} else if sessionId, ok := reqJson["SESSION_ID"]; ok {
+			req = prepareConnectionRequest(sessionId.(string))
+		} else if auth, ok := reqJson["AUTHORIZATION"]; ok {
+			if sid, ok := reqJson["SID"]; ok {
+				req = prepareConnectionRequest2(auth.(string), sid.(string))
+			} else {
+				fmt.Println("Authorization mode is enabled: Authorization or Sid not found !")
+			}
+		} else {
+			fmt.Println("Invalid conn mode !")
+		}
+	case ReqTypeValues["SCRIP_SUBS"]:
+		req = prepareSubsUnSubsRequest(scrips, strconv.Itoa(BinRespTypes["SUBSCRIBE_TYPE"]), ScripPrefix, channelNum)
+	case ReqTypeValues["SCRIP_UNSUBS"]:
+		req = prepareSubsUnSubsRequest(scrips, strconv.Itoa(BinRespTypes["UNSUBSCRIBE_TYPE"]), ScripPrefix, channelNum)
+	case ReqTypeValues["INDEX_SUBS"]:
+		req = prepareSubsUnSubsRequest(scrips, strconv.Itoa(BinRespTypes["SUBSCRIBE_TYPE"]), IndexPrefix, channelNum)
+	case ReqTypeValues["INDEX_UNSUBS"]:
+		req = prepareSubsUnSubsRequest(scrips, strconv.Itoa(BinRespTypes["UNSUBSCRIBE_TYPE"]), IndexPrefix, channelNum)
+	case ReqTypeValues["DEPTH_SUBS"]:
+		req = prepareSubsUnSubsRequest(scrips, strconv.Itoa(BinRespTypes["SUBSCRIBE_TYPE"]), DepthPrefix, channelNum)
+	case ReqTypeValues["DEPTH_UNSUBS"]:
+		req = prepareSubsUnSubsRequest(scrips, strconv.Itoa(BinRespTypes["UNSUBSCRIBE_TYPE"]), DepthPrefix, channelNum)
+	case ReqTypeValues["CHANNEL_PAUSE"]:
+		req = prepareChannelRequest(BinRespTypes["CHPAUSE_TYPE"], channelNum)
+	case ReqTypeValues["CHANNEL_RESUME"]:
+		req = prepareChannelRequest(BinRespTypes["CHRESUME_TYPE"], channelNum)
+	case ReqTypeValues["SNAP_MW"]:
+		req = prepareSnapshotRequest(scrips, strconv.Itoa(BinRespTypes["SNAPSHOT"]), ScripPrefix)
+	case ReqTypeValues["SNAP_DP"]:
+		req = prepareSnapshotRequest(scrips, strconv.Itoa(BinRespTypes["SNAPSHOT"]), DepthPrefix)
+	case ReqTypeValues["SNAP_IF"]:
+		req = prepareSnapshotRequest(scrips, strconv.Itoa(BinRespTypes["SNAPSHOT"]), IndexPrefix)
+	// TODO: complete opc chain subscription, throttling and logging requests later
+	//case ReqTypeValues["OPC_SUBS"]:
+	//	req = getOpcChainSubsRequest(reqJson["OPC_KEY"].(string), reqJson["STK_PRC"].(string),
+	//		reqJson["HIGH_STK"].(string), reqJson["LOW_STK"].(string), channelNum)
+	//case ReqTypeValues["THROTTLING_INTERVAL"]:
+	//	req = prepareThrottlingIntervalRequest(scrips)
+	//case ReqTypeValues["LOG"]:
+	//	if enable, ok := reqJson["enable"].(bool); ok {
+	//		enableLog(enable)
+	//	}
+	default:
+		fmt.Println("Unknown request type!")
+	}
+
+	if h.ws != nil && len(req) > 0 {
+		if err := h.ws.Write(context.Background(), websocket.MessageBinary, req); err != nil {
+			fmt.Println("Unable to send request! Reason: Connection faulty or request not valid!")
+		}
+	} else {
+		fmt.Println("Unable to send request! Reason: Connection faulty or request not valid!")
 	}
 }
 

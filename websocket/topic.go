@@ -226,23 +226,16 @@ func prepareSnapshotRequest(a, c, d string) []byte {
 	return buffer.getBytes()
 }
 
-func prepareChannelRequest(c int, a []int) []byte {
+// TODO: recheck if it's being used from anywhere else?
+func prepareChannelRequest(c int, a int) []byte {
 	buffer := make([]byte, 15)
 	buffer[0] = byte(c)
 	buffer[1] = 1
 	buffer[2] = 1
 	binary.BigEndian.PutUint16(buffer[3:5], 8)
 	var int1, int2 int
-	for _, d := range a {
-		switch {
-		case 0 < d && d <= 32:
-			int1 |= 1 << d
-		case 32 < d && d <= 64:
-			int2 |= 1 << d
-		default:
-			fmt.Println("Error: Channel values must be in this range  [ val > 0 && val < 65 ]")
-		}
-	}
+	int1 |= 1 << a
+	int2 = 0
 	binary.BigEndian.PutUint32(buffer[5:9], uint32(int2))
 	binary.BigEndian.PutUint32(buffer[9:13], uint32(int1))
 	return buffer
@@ -285,8 +278,8 @@ func getScripByteArray(c, a string) []byte {
 	return bytes
 }
 
-func getOpcChainSubsRequest(d string, e int64, a, c, f byte) []byte {
-	opcKeyLen := len(d)
+func getOpcChainSubsRequest(opcKey string, e int64, a, c byte, channelType int) []byte {
+	opcKeyLen := len(opcKey)
 	buffer := make([]byte, opcKeyLen+30)
 	pos := 0
 	buffer[pos] = byte(BinRespTypes["OPC_SUBSCRIBE"])
@@ -299,7 +292,7 @@ func getOpcChainSubsRequest(d string, e int64, a, c, f byte) []byte {
 	pos++
 	buffer[pos] = byte(opcKeyLen & 255)
 	pos++
-	copy(buffer[pos:], d)
+	copy(buffer[pos:], opcKey)
 	pos += opcKeyLen
 	buffer[pos] = 2
 	pos++
