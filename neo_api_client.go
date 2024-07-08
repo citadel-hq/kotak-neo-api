@@ -6,13 +6,15 @@ import (
 	"log"
 	"context"
 	"errors"
+	"fmt"
 )
 
 type KotakClient struct {
-	config    api.Configuration
-	websocket *websocket.HSWrapper // TODO: think about abstracting this away from the wrapper and building a simpler class instead.
-	loginAPI  *api.LoginAPI
-	orderAPI  *api.OrderService
+	config         api.Configuration
+	websocket      *websocket.HSWrapper // TODO: think about abstracting this away from the wrapper and building a simpler class instead.
+	loginAPI       *api.LoginAPI
+	orderAPI       *api.OrderService
+	orderReportAPI *api.OrderReportAPI
 }
 
 // note: a broker interface should give you a channel for consumption and a client for placing orders.
@@ -21,11 +23,13 @@ func NewKotakClient(configuration api.Configuration) (*KotakClient, chan websock
 	apiClient := api.NewAPIClient(configuration)
 	loginAPI := api.NewLoginAPI(apiClient)
 	orderAPI := api.NewOrderService(apiClient)
+	orderReportAPI := api.NewOrderReportAPI(apiClient)
 	return &KotakClient{
-		config:    configuration,
-		websocket: ws,
-		loginAPI:  loginAPI,
-		orderAPI:  orderAPI,
+		config:         configuration,
+		websocket:      ws,
+		loginAPI:       loginAPI,
+		orderAPI:       orderAPI,
+		orderReportAPI: orderReportAPI,
 	}, wsChannel
 }
 
@@ -79,10 +83,23 @@ func (c *KotakClient) Session2FA(otp string) (map[string]interface{}, error) {
 
 func (c *KotakClient) PlaceOrder(req api.OrderRequest) (map[string]interface{}, error) {
 	if c.config.EditToken != "" && c.config.EditSid != "" {
-		// TODO: insert the validation here
-		//exchangeSegment := api.ExchangeSegment[req.ExchangeSegment]
-		//product := api.Product[req.Product]
-		//orderType := api.OrderType[req.OrderType]
+		err := api.PlaceOrderValidation(req.ExchangeSegment,
+			req.Product,
+			fmt.Sprintf("%f", req.Price),
+			req.OrderType,
+			fmt.Sprintf("%d", req.Quantity),
+			req.Validity,
+			req.TradingSymbol,
+			req.TransactionType,
+			fmt.Sprintf("%f", req.Amo),
+			fmt.Sprintf("%d", req.DisclosedQuantity),
+			req.MarketProtection,
+			req.Pf,
+			fmt.Sprintf("%f", req.TriggerPrice),
+			req.Tag)
+		if err != nil {
+			return nil, err
+		}
 		return c.orderAPI.PlaceOrder(req)
 	}
 	return map[string]interface{}{
@@ -90,5 +107,35 @@ func (c *KotakClient) PlaceOrder(req api.OrderRequest) (map[string]interface{}, 
 			{"code": "900", "message": "Complete the 2fa process before accessing this application"},
 		},
 	}, errors.New("please complete the 2FA process before placing orders")
+}
 
+func (c *KotakClient) CancelOrder(orderId, amo string) (map[string]interface{}, error) {
+	if amo == "" {
+		amo = "NO"
+	}
+
+	if c.config.EditToken != "" && c.config.EditSid != "" {
+		err := api.CancelOrderValidation(orderId, amo)
+		if err != nil {
+			return nil, err
+		}
+		// TODO: recheck amount?
+		return c.orderAPI.CancelOrder(orderId, false, 0.0)
+	}
+	return map[string]interface{}{
+		"error": []map[string]string{
+			{"code": "900", "message": "Complete the 2fa process before accessing this application"},
+		},
+	}, errors.New("please complete the 2FA process before placing orders")
+}
+
+func (c *KotakClient) OrderReport() (map[string]interface{}, error) {
+	if c.config.EditToken != "" && c.config.EditSid != "" {
+		return c.orderReportAPI.GetOrderReport()
+	}
+	return map[string]interface{}{
+		"error": []map[string]string{
+			{"code": "900", "message": "Complete the 2fa process before accessing this application"},
+		},
+	}, errors.New("please complete the 2FA process before placing orders")
 }
