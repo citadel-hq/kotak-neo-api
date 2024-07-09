@@ -8,11 +8,11 @@ type APIClient struct {
 	RestClient     *RESTClientObject
 	UserAgent      string
 	DefaultHeaders map[string]string
-	Config         Configuration
+	Config         *Configuration
 }
 
 // NewAPIClient creates a new API client with the specified base URL.
-func NewAPIClient(configuration Configuration) *APIClient {
+func NewAPIClient(configuration *Configuration) *APIClient {
 	return &APIClient{
 		RestClient:     NewRESTClientObject(configuration),
 		UserAgent:      "NeoTradeApi-python/1.0.0/python",

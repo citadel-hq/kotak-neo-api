@@ -10,7 +10,7 @@ import (
 )
 
 type KotakClient struct {
-	config          api.Configuration
+	config          *api.Configuration
 	websocket       *websocket.HSWrapper // TODO: think about abstracting this away from the wrapper and building a simpler class instead.
 	loginAPI        *api.LoginAPI
 	orderAPI        *api.OrderService
@@ -26,7 +26,7 @@ type KotakClient struct {
 }
 
 // note: a broker interface should give you a channel for consumption and a client for placing orders.
-func NewKotakClient(configuration api.Configuration) (*KotakClient, chan websocket.BrokerEvent) {
+func NewKotakClient(configuration *api.Configuration) (*KotakClient, chan websocket.BrokerEvent) {
 	ws, wsChannel := websocket.NewHSWrapper()
 	apiClient := api.NewAPIClient(configuration)
 	loginAPI := api.NewLoginAPI(apiClient)

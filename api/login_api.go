@@ -30,7 +30,7 @@ func (api *LoginAPI) SessionInit() (map[string]interface{}, error) {
 	URL, err := api.APIClient.Config.getDomain(true)
 	URL = URL + "oauth2/token"
 
-	response, err := api.RestClient.Request(URL, http.MethodPost, nil, headerParams, bodyParams)
+	response, err := api.RestClient.Request(http.MethodPost, URL, nil, headerParams, bodyParams)
 	if err != nil {
 		return nil, err
 	}

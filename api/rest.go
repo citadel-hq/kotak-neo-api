@@ -21,10 +21,10 @@ func (e *ApiException) Error() string {
 }
 
 type RESTClientObject struct {
-	Configuration Configuration
+	Configuration *Configuration
 }
 
-func NewRESTClientObject(configuration Configuration) *RESTClientObject {
+func NewRESTClientObject(configuration *Configuration) *RESTClientObject {
 	return &RESTClientObject{
 		Configuration: configuration,
 	}
