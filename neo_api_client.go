@@ -19,6 +19,10 @@ type KotakClient struct {
 	tradeReportAPI  *api.TradeReportAPI
 	positionsAPI    *api.PositionsAPI
 	holdingsAPI     *api.PortfolioHoldingsAPI
+	modificationAPI *api.ModifyOrderAPI
+	marginAPI       *api.MarginAPI
+	limitsAPI       *api.LimitsAPI
+	logoutAPI       *api.LogoutAPI
 }
 
 // note: a broker interface should give you a channel for consumption and a client for placing orders.
@@ -32,6 +36,11 @@ func NewKotakClient(configuration api.Configuration) (*KotakClient, chan websock
 	tradeReportAPI := api.NewTradeReportAPI(apiClient)
 	positionsAPI := api.NewPositionsAPI(apiClient)
 	holdingsAPI := api.NewPortfolioHoldingsAPI(apiClient)
+	modificationAPI := api.NewModifyOrderAPI(apiClient)
+	marginAPI := api.NewMarginAPI(apiClient)
+	limitsAPI := api.NewLimitsAPI(apiClient)
+	logoutAPI := api.NewLogoutAPI(apiClient)
+
 	return &KotakClient{
 		config:          configuration,
 		websocket:       ws,
@@ -42,6 +51,10 @@ func NewKotakClient(configuration api.Configuration) (*KotakClient, chan websock
 		tradeReportAPI:  tradeReportAPI,
 		positionsAPI:    positionsAPI,
 		holdingsAPI:     holdingsAPI,
+		modificationAPI: modificationAPI,
+		marginAPI:       marginAPI,
+		limitsAPI:       limitsAPI,
+		logoutAPI:       logoutAPI,
 	}, wsChannel
 }
 
@@ -200,4 +213,99 @@ func (c *KotakClient) Holdings() (map[string]interface{}, error) {
 	}, errors.New("please complete the 2FA process before placing orders")
 }
 
-// TODO: build margin_required, modify_order etc.
+func (c *KotakClient) ModifyOrder(modificationRequest api.ModifyOrderRequest) (map[string]interface{}, error) {
+	if c.config.EditToken != "" && c.config.EditSid != "" {
+		if modificationRequest.OrderID != "" &&
+			modificationRequest.InstrumentToken != "" &&
+			modificationRequest.ExchangeSegment != "" &&
+			modificationRequest.Product != "" &&
+			modificationRequest.TradingSymbol != "" {
+
+			modificationRequest.ExchangeSegment = api.ExchangeSegment[modificationRequest.ExchangeSegment]
+			modificationRequest.Product = api.Product[modificationRequest.Product]
+			modificationRequest.OrderType = api.OrderType[modificationRequest.OrderType]
+
+			return c.modificationAPI.ModifyQuick(modificationRequest)
+		} else if modificationRequest.OrderID != "" &&
+			modificationRequest.InstrumentToken == "" &&
+			modificationRequest.ExchangeSegment == "" &&
+			modificationRequest.TradingSymbol == "" {
+			return c.modificationAPI.ModifyWithOrderID(modificationRequest)
+		} else {
+			return map[string]interface{}{
+				"error": []map[string]string{
+					{"code": "900", "message": "Order ID is Mandate if we need to proceed further!"},
+				},
+			}, errors.New("order ID is Mandate if we need to proceed further")
+		}
+	}
+	return map[string]interface{}{
+		"error": []map[string]string{
+			{"code": "900", "message": "Complete the 2fa process before accessing this application"},
+		},
+	}, errors.New("please complete the 2FA process before placing orders")
+}
+
+func (c *KotakClient) MarginRequired(req api.MarginRequest) (map[string]interface{}, error) {
+	if c.config.EditToken != "" && c.config.EditSid != "" {
+		err := api.MarginValidation(req.ExchangeSegment,
+			fmt.Sprintf("%f", req.Price),
+			req.OrderType,
+			req.Product,
+			fmt.Sprintf("%d", req.Quantity),
+			req.InstrumentToken,
+			req.TransactionType,
+			fmt.Sprintf("%f", req.TriggerPrice))
+		if err != nil {
+			return nil, err
+		}
+
+		req.ExchangeSegment = api.ExchangeSegment[req.ExchangeSegment]
+		req.Product = api.Product[req.Product]
+		req.OrderType = api.OrderType[req.OrderType]
+
+		return c.marginAPI.GetMargin(req)
+	}
+	return map[string]interface{}{
+		"error": []map[string]string{
+			{"code": "900", "message": "Complete the 2fa process before accessing this application"},
+		},
+	}, errors.New("please complete the 2FA process before placing orders")
+}
+
+func (c *KotakClient) Limits(segment, exchange, product string) (map[string]interface{}, error) {
+	if c.config.EditToken != "" && c.config.EditSid != "" {
+		err := api.LimitsValidation(segment, exchange, product)
+		if err != nil {
+			return nil, err
+		}
+		return c.limitsAPI.GetLimits(segment, exchange, product)
+	}
+	return map[string]interface{}{
+		"error": []map[string]string{
+			{"code": "900", "message": "Complete the 2fa process before accessing this application"},
+		},
+	}, errors.New("please complete the 2FA process before placing orders")
+}
+
+func (c *KotakClient) Logout() (map[string]interface{}, error) {
+	if c.config.EditToken != "" && c.config.EditSid != "" {
+		_, err := c.logoutAPI.LogoutUser()
+		if err != nil {
+			return nil, err
+		}
+		c.config.BearerToken = ""
+		c.config.EditToken = ""
+		c.config.EditSid = ""
+		return map[string]interface{}{
+			"State": "OK", "message": "You have been successfully logged out",
+		}, nil
+	}
+	return map[string]interface{}{
+		"error": []map[string]string{
+			{"code": "900", "message": "Complete the 2fa process before accessing this application"},
+		},
+	}, errors.New("please complete the 2FA process before placing orders")
+}
+
+// TODO: complete unsubscribe WS.
